@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Sleeping Dashboard</title>
+    <link rel="stylesheet" href="./global.css" />
+    <link rel="stylesheet" href="./normalize.min.css" />
+    <link rel="stylesheet" href="./index.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="mod">
+      <div class="header">
+        <span class="sleeping-dashboard">My Sleeping Dashboard</span>
+        <!-- 日期选择控件 -->
+        <div class="mask">
+          <select id="dateSelector">
+            <option value="2024-12-03">2024-12-03</option>
+            <option value="2024-12-04">2024-12-04</option>
+            <option value="2024-12-05">2024-12-05</option>
+            <option value="2024-12-06">2024-12-06</option>
+            <option value="2024-12-07">2024-12-07</option>
+            <option value="2024-12-08">2024-12-08</option>
+            <option value="2024-12-09">2024-12-09</option>
+            <option value="2024-12-11">2024-12-11</option>
+          </select>
+        </div>
+      </div>
+      <div class="body">
+        <div class="group">
+          <div class="view-common view">
+            <span class="number-common number">Number</span>
+            <span class="number-common info">of bad sleeping positions</span>
+            <span class="number-common num">Loading...</span>
+          </div>
+          <div class="view-common view-1">
+            <span class="score-common score">Score</span>
+            <span class="score-common num-1">Loading...</span>
+          </div>
+        </div>
+        <div class="overlayer">
+          <canvas id="sleepPostureChart" width="800" height="400"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 睡姿映射
+      const postureMapping = {
+        "On back": 1,
+        "Left single leg": 2,
+        "Left double leg": 3,
+        "Right single leg": 4,
+        "Right double leg": 5,
+        "On stomach": 6,
+        "Other": 7,
+      };
+
+      // 分数数据映射
+      const scoreData = {
+        "2024-12-11": 75,
+        "2024-12-09": 70,
+        "2024-12-08": 75,
+        "2024-12-07": 73,
+        "2024-12-06": 61,
+        "2024-12-05": 71,
+        "2024-12-04": 91,
+        "2024-12-03": 78,
+      };
+
+      let chartInstance = null;
+
+
+      function fetchSleepData(date) {
+        fetch(`http://localhost:5000/api/sleep-data?date=${date}`)
+          .then((response) => response.json())
+          .then((sleepData) => {
+ 
+            const formattedData = sleepData.map((item) => {
+              const time = new Date(item.Timestamp);
+              const hour = time.getHours();
+              const minute = time.getMinutes();
+              const timeLabel = `${hour}:${minute < 10 ? '0' + minute : minute}`; 
+
+              return {
+                x: timeLabel, 
+                y: postureMapping[item["Sleeping posture"]] || postureMapping["Other"],
+              };
+            });
+
+            if (chartInstance) {
+              chartInstance.destroy();
+            }
+
+
+            const ctx = document.getElementById("sleepPostureChart").getContext("2d");
+            chartInstance = new Chart(ctx, {
+              type: "line",
+              data: {
+                datasets: [
+                  {
+                    label: "Sleeping Posture",
+                    data: formattedData,
+                    borderColor: "purple",
+                    borderWidth: 2,
+                    stepped: true,
+                    fill: false,
+                  },
+                ],
+              },
+              options: {
+                scales: {
+                  x: {
+                    type: "category",
+                    title: {
+                      display: true,
+                      text: "Time (Hour:Minute)",
+                    },
+                    ticks: {
+                      autoSkip: true, 
+                    },
+                  },
+                  y: {
+                    title: {
+                      display: true,
+                      text: "Sleeping Postures",
+                    },
+                    ticks: {
+                      callback: function (value) {
+                        return Object.keys(postureMapping).find(
+                          (key) => postureMapping[key] === value
+                        );
+                      },
+                    },
+                    min: 1,
+                    max: 7,
+                  },
+                },
+                plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: function (tooltipItem) {
+                        const data = sleepData[tooltipItem.dataIndex]; 
+                        const time = data.Timestamp;
+                        const accuracy = data["Accuracy value"];
+                        return `Time: ${time}, Accuracy: ${accuracy.toFixed(2)}`; 
+                      },
+                    },
+                  },
+                },
+              },
+            });
+
+
+            const badPostures = sleepData.filter(
+              (item) => item["Accuracy value"] < 0.8
+            ).length;
+            document.querySelector(".number-common.num").textContent = badPostures;
+            document.querySelector(".score-common.num-1").textContent =
+              scoreData[date] || "N/A";
+          })
+          .catch((error) => console.error("Error fetching data:", error));
+      }
+
+      // 初始加载数据
+      fetchSleepData("2024-12-03");
+
+      document.getElementById("dateSelector").addEventListener("change", (e) => {
+        fetchSleepData(e.target.value);
+      });
+    </script>
+  </body>
+</html>
